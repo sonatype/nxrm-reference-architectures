@@ -47,4 +47,4 @@ db_allocated_storage = 100
 db_max_connections   = 1600
 db_connection_pool   = 100
 # IMPORTANT: Change this password before deploying to production. Use TF_VAR_db_password env var or Secrets Manager.
-db_password = "CHANGE_ME"
+# db_password = "CHANGE_ME"
