@@ -2,7 +2,7 @@
 # RA-1 (XSmall) - Self-Managed Configuration
 # =============================================================================
 # Use case: Development environments, small teams (<50 users), CE edition
-# Compute:  1x EC2 m7g.xlarge (4 vCPU, 16 GiB RAM)
+# Compute:  1x EC2 m8g.xlarge (4 vCPU, 16 GiB RAM)
 # Database: H2 embedded (no RDS required)
 # Storage:  Local EBS filesystem for blob store
 # HA:       No (single instance)
@@ -54,11 +54,11 @@ aws_region = "us-east-1"
 environment_name = "nxrm-ra1"
 
 # -- Compute ------------------------------------------------------------------
-instance_type = "m7g.xlarge"
+instance_type = "m8g.xlarge"
 instance_arch = "arm64"
 cluster_size  = 1
 
-# -- JVM Settings (tuned for m7g.xlarge: 4 vCPU, 16 GiB) --------------------
+# -- JVM Settings (tuned for m8g.xlarge: 4 vCPU, 16 GiB) --------------------
 java_min_heap          = "8g"
 java_max_heap          = "8g"
 java_max_direct_memory = "4g"
@@ -77,7 +77,7 @@ database_type = "h2"
 # Place a .lic file in files_to_upload_to_nodes/ to enable Pro features.
 
 # -- PostgreSQL (set database_type = "postgres" to enable) --------------------
-# db_instance_type    = "db.r7g.large"
+# db_instance_type    = "db.r8g.large"
 # db_password         = ""   # Use TF_VAR_db_password env var instead
 # db_allocated_storage = 100
 

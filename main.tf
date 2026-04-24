@@ -47,11 +47,11 @@ locals {
 
   # Derive RA size name from instance type (used for logging in configure-nexus)
   ra_size = (
-    var.instance_type == "m7g.xlarge" ? "xsmall" :
-    var.instance_type == "m7g.2xlarge" && var.cluster_size == 1 ? "small" :
-    var.instance_type == "m7g.2xlarge" ? "medium" :
-    var.instance_type == "m7g.8xlarge" ? "large" :
-    var.instance_type == "m7g.12xlarge" ? "xlarge" :
+    var.instance_type == "m8g.xlarge" ? "xsmall" :
+    var.instance_type == "m8g.2xlarge" && var.cluster_size == 1 ? "small" :
+    var.instance_type == "m8g.2xlarge" ? "medium" :
+    var.instance_type == "m8g.8xlarge" ? "large" :
+    var.instance_type == "m8g.12xlarge" ? "xlarge" :
     "custom"
   )
 
@@ -174,7 +174,7 @@ module "iam" {
 
   name_prefix          = local.name_prefix
   blobstore_type       = var.blobstore_type
-  blobstore_bucket_arn = module.storage[0].bucket_arn
+  blobstore_bucket_arn = local.uses_s3_blobs ? module.storage[0].bucket_arn : null
   artifact_bucket_arn  = aws_s3_bucket.artifacts.arn
 }
 

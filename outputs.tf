@@ -26,7 +26,7 @@ output "subnet_ids" {
 
 output "blobstore_bucket" {
   description = "S3 bucket name for NXRM blob store (empty when blobstore_type = file)"
-  value       = module.storage[0].bucket_name
+  value       = local.uses_s3_blobs ? module.storage[0].bucket_name : null
 }
 
 output "blobstore_type" {

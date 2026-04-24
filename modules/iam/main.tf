@@ -61,8 +61,8 @@ data "aws_iam_policy_document" "s3_blobstore" {
       "s3:GetBucketPolicy",
     ]
     resources = [
-      var.blobstore_bucket_arn,
-      "${var.blobstore_bucket_arn}/*",
+      var.blobstore_bucket_arn != null ? var.blobstore_bucket_arn : "",
+      var.blobstore_bucket_arn != null ? "${var.blobstore_bucket_arn}/*" : "",
     ]
   }
 }

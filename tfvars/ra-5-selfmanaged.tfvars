@@ -2,8 +2,8 @@
 # RA-5 (XLarge) - Self-Managed Configuration
 # =============================================================================
 # Use case: Enterprise-scale deployments (5000+ users)
-# Compute:  4x EC2 m7g.12xlarge (48 vCPU, 192 GiB RAM each)
-# Database: RDS PostgreSQL db.r7g.8xlarge (Multi-AZ HA)
+# Compute:  4x EC2 m8g.12xlarge (48 vCPU, 192 GiB RAM each)
+# Database: RDS PostgreSQL db.r8g.8xlarge (Multi-AZ HA)
 # Storage:  Single S3 bucket for blob store
 # HA:       Yes (4-node Hazelcast cluster)
 #
@@ -24,7 +24,7 @@ aws_region       = "us-east-1"
 # alb_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID"
 
 # -- Compute ------------------------------------------------------------------
-instance_type = "m7g.12xlarge"
+instance_type = "m8g.12xlarge"
 instance_arch = "arm64"
 cluster_size  = 4
 
@@ -40,7 +40,7 @@ nexus_data_volume_type = "gp3"
 
 # -- Database -----------------------------------------------------------------
 database_type        = "postgres"
-db_instance_type     = "db.r7g.8xlarge"
+db_instance_type     = "db.r8g.8xlarge"
 db_multi_az          = true
 db_engine_version    = "16.6"
 db_allocated_storage = 1000

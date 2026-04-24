@@ -2,8 +2,8 @@
 # RA-2 (Small) - Self-Managed Configuration
 # =============================================================================
 # Use case: Small production deployments (50-200 users)
-# Compute:  1x EC2 m7g.2xlarge (8 vCPU, 32 GiB RAM)
-# Database: RDS PostgreSQL db.r7g.large (single instance)
+# Compute:  1x EC2 m8g.2xlarge (8 vCPU, 32 GiB RAM)
+# Database: RDS PostgreSQL db.r8g.large (single instance)
 # Storage:  Single S3 bucket for blob store
 # HA:       No (single instance)
 #
@@ -25,7 +25,7 @@ aws_region       = "us-east-1"
 # alb_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID"
 
 # -- Compute ------------------------------------------------------------------
-instance_type = "m7g.2xlarge"
+instance_type = "m8g.2xlarge"
 instance_arch = "arm64"
 cluster_size  = 1
 
@@ -40,16 +40,11 @@ nexus_data_volume_type = "gp3"
 
 # -- Database -----------------------------------------------------------------
 database_type        = "postgres"
-db_instance_type     = "db.r7g.large"
+db_instance_type     = "db.r8g.large"
 db_multi_az          = false
 db_engine_version    = "16.6"
 db_allocated_storage = 100
 db_max_connections   = 1600
 db_connection_pool   = 100
-# db_password        = "CHANGE_ME"  # Use env var TF_VAR_db_password or Secrets Manager
-
-
-
-
-
-db_password = "nexusnexusnexusnexus"  # Use env var TF_VAR_db_password or Secrets Manager
+# IMPORTANT: Change this password before deploying to production. Use TF_VAR_db_password env var or Secrets Manager.
+db_password = "CHANGE_ME"
