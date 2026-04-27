@@ -32,7 +32,7 @@ variable "allowed_security_group_ids" {
 }
 
 variable "instance_class" {
-  description = "RDS instance class (e.g., db.r7g.large for RA-2, db.r7g.2xlarge for RA-3)"
+  description = "RDS instance class (e.g., db.r8g.large for RA-2, db.r8g.2xlarge for RA-3)"
   type        = string
 }
 

@@ -18,9 +18,10 @@ variable "blobstore_type" {
 }
 
 variable "blobstore_bucket_arn" {
-  description = "ARN of the S3 blob store bucket (empty when blobstore_type = file)"
+  description = "ARN of the S3 blob store bucket (null when blobstore_type = file)"
   type        = string
-  default     = ""
+  default     = null
+  nullable    = true
 }
 
 variable "artifact_bucket_arn" {

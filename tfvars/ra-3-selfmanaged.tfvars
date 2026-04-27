@@ -2,8 +2,8 @@
 # RA-3 (Medium) - Self-Managed Configuration
 # =============================================================================
 # Use case: Medium production with HA (200-1000 users)
-# Compute:  3x EC2 m7g.2xlarge (8 vCPU, 32 GiB RAM each)
-# Database: RDS PostgreSQL db.r7g.2xlarge (Multi-AZ HA)
+# Compute:  3x EC2 m8g.2xlarge (8 vCPU, 32 GiB RAM each)
+# Database: RDS PostgreSQL db.r8g.2xlarge (Multi-AZ HA)
 # Storage:  Single S3 bucket for blob store
 # HA:       Yes (3-node Hazelcast cluster)
 #
@@ -24,7 +24,7 @@ aws_region       = "us-east-1"
 # alb_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID"
 
 # -- Compute ------------------------------------------------------------------
-instance_type = "m7g.2xlarge"
+instance_type = "m8g.2xlarge"
 instance_arch = "arm64"
 cluster_size  = 3
 
@@ -40,7 +40,7 @@ nexus_data_volume_type = "gp3"
 
 # -- Database -----------------------------------------------------------------
 database_type        = "postgres"
-db_instance_type     = "db.r7g.2xlarge"
+db_instance_type     = "db.r8g.2xlarge"
 db_multi_az          = true
 db_engine_version    = "16.6"
 db_allocated_storage = 200

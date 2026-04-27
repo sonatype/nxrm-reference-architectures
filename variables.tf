@@ -96,7 +96,7 @@ variable "cluster_size" {
 variable "instance_type" {
   description = "EC2 instance type for NXRM nodes"
   type        = string
-  default     = "m7g.xlarge"
+  default     = "m8g.xlarge"
 }
 
 variable "instance_arch" {
@@ -128,7 +128,7 @@ variable "database_type" {
 variable "db_instance_type" {
   description = "RDS PostgreSQL instance type"
   type        = string
-  default     = "db.r7g.large"
+  default     = "db.r8g.large"
 }
 
 variable "db_multi_az" {
