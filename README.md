@@ -420,6 +420,12 @@ nexus_blob_volume_type = "gp3"
 - Size limited by EBS volume limits (16 TiB max)
 - Cannot be used with clustered deployments
 
+#### Global Distribution (Optional, Enterprise license required)
+
+Two mutually exclusive options, off by default, available on any architecture using `blobstore_type = "s3"` (RA-2 to RA-5 by default; not RA-1, which uses EBS).
+
+> **Requires an Enterprise license.** Global Distribution (CloudFront or S3 Transfer Acceleration) is a Nexus Repository Enterprise feature; the infrastructure below can be created without it, but Nexus will not use it without an Enterprise license.
+
 #### CloudFront (Optional)
 
 Serve S3 blob content through a CloudFront distribution using signed URLs. Requires `blobstore_type = "s3"`; the bucket stays private.
