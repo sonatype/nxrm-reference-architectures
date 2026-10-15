@@ -20,3 +20,8 @@ output "bucket_region" {
   description = "S3 bucket region (empty when blobstore_type = file)"
   value       = var.blobstore_type == "s3" ? aws_s3_bucket.blobstore[0].region : ""
 }
+
+output "bucket_regional_domain_name" {
+  description = "Regional domain name of the S3 blob store bucket (empty when blobstore_type = file)"
+  value       = var.blobstore_type == "s3" ? aws_s3_bucket.blobstore[0].bucket_regional_domain_name : ""
+}

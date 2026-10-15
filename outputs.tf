@@ -35,6 +35,32 @@ output "blobstore_type" {
 }
 
 # -----------------------------------------------------------------------------
+# CloudFront (only when enable_cloudfront = true)
+# Feed these three values into the Nexus CloudFront configuration.
+# -----------------------------------------------------------------------------
+
+output "cloudfront_distribution_domain" {
+  description = "CloudFront distribution URL to configure in Nexus"
+  value       = local.uses_cloudfront ? module.cloudfront[0].distribution_domain : null
+}
+
+output "cloudfront_key_pair_id" {
+  description = "CloudFront public key ID (Key-Pair-Id of signed URLs)"
+  value       = local.uses_cloudfront ? module.cloudfront[0].key_pair_id : null
+}
+
+output "cloudfront_signing_private_key" {
+  description = "PKCS#8 PEM private key for signing URLs. Retrieve with: terraform output -raw cloudfront_signing_private_key"
+  value       = local.uses_cloudfront ? module.cloudfront[0].signing_private_key : null
+  sensitive   = true
+}
+
+output "s3_accelerate_endpoint" {
+  description = "S3 Transfer Acceleration endpoint for the blob store bucket (only when enable_s3_transfer_acceleration = true)"
+  value       = var.enable_s3_transfer_acceleration && local.uses_s3_blobs ? "${module.storage[0].bucket_name}.s3-accelerate.amazonaws.com" : null
+}
+
+# -----------------------------------------------------------------------------
 # Compute (EC2)
 # -----------------------------------------------------------------------------
 
