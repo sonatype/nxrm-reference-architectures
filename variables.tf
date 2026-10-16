@@ -200,6 +200,47 @@ variable "blobstore_bucket_prefix" {
   default     = "nxrm-blobstore"
 }
 
+variable "enable_cloudfront" {
+  description = "Opt in: serve S3 blob store content through a CloudFront distribution with signed URLs (requires blobstore_type = 's3')"
+  type        = bool
+  default     = false
+}
+
+variable "enable_s3_transfer_acceleration" {
+  description = "Opt in: enable S3 Transfer Acceleration on the blob store bucket (requires blobstore_type = 's3'; mutually exclusive with enable_cloudfront)"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_price_class" {
+  description = "CloudFront price class: PriceClass_All, PriceClass_200, or PriceClass_100"
+  type        = string
+  default     = "PriceClass_All"
+
+  validation {
+    condition     = contains(["PriceClass_All", "PriceClass_200", "PriceClass_100"], var.cloudfront_price_class)
+    error_message = "cloudfront_price_class must be PriceClass_All, PriceClass_200, or PriceClass_100."
+  }
+}
+
+variable "cloudfront_default_ttl" {
+  description = "Seconds CloudFront caches an object when S3 sends no Cache-Control header"
+  type        = number
+  default     = 86400
+}
+
+variable "cloudfront_max_ttl" {
+  description = "Maximum seconds CloudFront caches an object"
+  type        = number
+  default     = 7776000
+}
+
+variable "cloudfront_enable_additional_metrics" {
+  description = "Publish additional CloudFront metrics to CloudWatch (billed per metric per month)"
+  type        = bool
+  default     = false
+}
+
 variable "nexus_blob_volume_size" {
   description = "Size of the EBS blob store volume in GB (only used when blobstore_type = 'file')"
   type        = number

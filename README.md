@@ -420,6 +420,43 @@ nexus_blob_volume_type = "gp3"
 - Size limited by EBS volume limits (16 TiB max)
 - Cannot be used with clustered deployments
 
+#### Global Distribution (Optional, Enterprise license required)
+
+Two mutually exclusive options, off by default, available on any architecture using `blobstore_type = "s3"` (RA-2 to RA-5 by default; not RA-1, which uses EBS).
+
+> **Requires an Enterprise license.** Global Distribution (CloudFront or S3 Transfer Acceleration) is a Nexus Repository Enterprise feature; the infrastructure below can be created without it, but Nexus will not use it without an Enterprise license.
+
+#### CloudFront (Optional)
+
+Serve S3 blob content through a CloudFront distribution using signed URLs. Requires `blobstore_type = "s3"`; the bucket stays private.
+
+```hcl
+# terraform.tfvars
+enable_cloudfront = true
+# cloudfront_price_class               = "PriceClass_100"
+# cloudfront_enable_additional_metrics = true  # billed per metric
+```
+
+After `terraform apply`, feed these outputs into your Nexus CloudFront configuration:
+```bash
+terraform output -raw cloudfront_distribution_domain
+terraform output -raw cloudfront_key_pair_id
+terraform output -raw cloudfront_signing_private_key
+```
+
+The signing private key is stored in Terraform state; use an encrypted remote backend.
+
+#### S3 Transfer Acceleration (Optional)
+
+Alternative to CloudFront for global distribution: enables Transfer Acceleration on the blob store bucket so clients reach S3 through the nearest AWS edge location. Requires `blobstore_type = "s3"` and is **mutually exclusive** with `enable_cloudfront`.
+
+```hcl
+# terraform.tfvars
+enable_s3_transfer_acceleration = true
+```
+
+The accelerated endpoint is available as `terraform output s3_accelerate_endpoint`. Transfer Acceleration is billed per GB transferred through the accelerated endpoint.
+
 #### Database
 
 **PostgreSQL (RA-2 and above):**

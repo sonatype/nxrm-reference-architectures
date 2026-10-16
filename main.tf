@@ -56,7 +56,8 @@ locals {
   )
 
   # Shorthand for conditionals
-  uses_s3_blobs  = var.blobstore_type == "s3"
+  uses_s3_blobs   = var.blobstore_type == "s3"
+  uses_cloudfront = var.enable_cloudfront && local.uses_s3_blobs
 }
 
 # -----------------------------------------------------------------------------
@@ -65,6 +66,21 @@ locals {
 
 resource "null_resource" "validate_installer" {
   lifecycle {
+    precondition {
+      condition     = !(var.enable_cloudfront && var.enable_s3_transfer_acceleration)
+      error_message = "enable_cloudfront and enable_s3_transfer_acceleration are mutually exclusive; choose one."
+    }
+
+    precondition {
+      condition     = !var.enable_s3_transfer_acceleration || local.uses_s3_blobs
+      error_message = "enable_s3_transfer_acceleration requires blobstore_type = \"s3\"."
+    }
+
+    precondition {
+      condition     = !var.enable_cloudfront || local.uses_s3_blobs
+      error_message = "enable_cloudfront requires blobstore_type = \"s3\"."
+    }
+
     precondition {
       condition     = length(local.installer_files) == 1
       error_message = "Place exactly one nexus*.tar.gz file in ${var.installer_dir}/ (e.g., nexus-3.90.2-unix.tar.gz)"
@@ -224,6 +240,55 @@ data "aws_iam_policy_document" "blobstore_bucket_policy" {
       identifiers = [module.iam.ec2_role_arn]
     }
   }
+
+  # SourceArn scopes the grant to this one distribution.
+  dynamic "statement" {
+    for_each = local.uses_cloudfront ? [1] : []
+    content {
+      sid       = "AllowCloudFrontServicePrincipalReadOnly"
+      actions   = ["s3:GetObject"]
+      resources = ["${module.storage[0].bucket_arn}/*"]
+
+      principals {
+        type        = "Service"
+        identifiers = ["cloudfront.amazonaws.com"]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "AWS:SourceArn"
+        values   = [module.cloudfront[0].distribution_arn]
+      }
+    }
+  }
+}
+
+# -----------------------------------------------------------------------------
+# CloudFront (opt-in: enable_cloudfront = true)
+# Signed-URL CDN in front of the S3 blob store.
+# -----------------------------------------------------------------------------
+
+module "cloudfront" {
+  source = "./modules/cloudfront"
+  count  = local.uses_cloudfront ? 1 : 0
+
+  name                        = "${local.name_prefix}-cdn"
+  bucket_name                 = module.storage[0].bucket_name
+  bucket_regional_domain_name = module.storage[0].bucket_regional_domain_name
+  price_class                 = var.cloudfront_price_class
+  default_ttl                 = var.cloudfront_default_ttl
+  max_ttl                     = var.cloudfront_max_ttl
+  enable_additional_metrics   = var.cloudfront_enable_additional_metrics
+}
+
+# -----------------------------------------------------------------------------
+# S3 Transfer Acceleration (opt-in alternative to CloudFront)
+# -----------------------------------------------------------------------------
+
+resource "aws_s3_bucket_accelerate_configuration" "blobstore" {
+  count  = var.enable_s3_transfer_acceleration && local.uses_s3_blobs ? 1 : 0
+  bucket = module.storage[0].bucket_name
+  status = "Enabled"
 }
 
 resource "aws_s3_bucket_policy" "blobstore" {
