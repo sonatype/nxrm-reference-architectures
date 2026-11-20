@@ -13,5 +13,5 @@ output "custom_data" {
 
 output "rendered_scripts" {
   description = "Script name to rendered text for node 0 (tests and check-templates.sh)"
-  value       = local.node_scripts[0]
+  value       = merge({ lib = local.lib_script }, local.node_scripts[0])
 }

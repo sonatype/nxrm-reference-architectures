@@ -34,6 +34,14 @@
 # dns_zone_name           = "example.com"
 # dns_zone_resource_group = "<dns zone resource group>"
 
+# -- Required unless Terraform runs inside the nodes subnet ---------------------
+# Public IP of the machine that runs Terraform; it uploads the installer to the storage account.
+# storage_allowed_ip_cidrs = ["<your public IP>"]
+
+# -- Recommended: restrict who can reach the gateway -----------------------------
+# The default 0.0.0.0/0 allows every client and also opens the blob store firewall.
+# ingress_cidr_blocks = ["203.0.113.0/24"]
+
 location         = "eastus"
 environment_name = "ra4"
 

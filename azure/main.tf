@@ -45,7 +45,7 @@ resource "azurerm_resource_group" "main" {
   tags     = local.tags
 }
 
-# ---------- Identity (nodes and gateway share it) ----------
+# ---------- Identities (the gateway has its own, with no access to passwords or storage) ----------
 
 resource "azurerm_user_assigned_identity" "nexus" {
   name                = "${local.name_prefix}-identity"
@@ -54,7 +54,18 @@ resource "azurerm_user_assigned_identity" "nexus" {
   tags                = local.tags
 }
 
+resource "azurerm_user_assigned_identity" "gateway" {
+  count               = local.use_gateway ? 1 : 0
+  name                = "${local.name_prefix}-gateway-identity"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.location
+  tags                = local.tags
+}
+
 locals {
+  # The gateway reads the certificate on clusters; nginx on the node reads it on single nodes.
+  certificate_reader_principal_id = local.use_gateway ? azurerm_user_assigned_identity.gateway[0].principal_id : azurerm_user_assigned_identity.nexus.principal_id
+
   certificate_secret_id      = trimsuffix(var.certificate_secret_id, "/")
   certificate_secret_name    = regex("/secrets/([^/]+)$", local.certificate_secret_id)[0]
   certificate_secret_vault   = lower(regex("^https://([^.]+)\\.", local.certificate_secret_id)[0])
@@ -65,7 +76,7 @@ locals {
 resource "azurerm_role_assignment" "key_vault_secrets_user" {
   scope                = "${trimsuffix(var.certificate_key_vault_id, "/")}/secrets/${local.certificate_secret_name}"
   role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_user_assigned_identity.nexus.principal_id
+  principal_id         = local.certificate_reader_principal_id
   principal_type       = "ServicePrincipal"
 
   lifecycle {
@@ -95,12 +106,6 @@ resource "random_password" "db" {
 locals {
   nexus_admin_password = var.nexus_admin_password != null ? var.nexus_admin_password : random_password.nexus_admin[0].result
   db_password          = !local.is_postgres ? "" : var.db_password != null ? var.db_password : random_password.db[0].result
-
-  # Uploaded as a private blob; nodes read it with the managed identity at boot.
-  secrets_json = sensitive(jsonencode({
-    nexus_admin_password = local.nexus_admin_password
-    db_password          = local.db_password
-  }))
 }
 
 # ---------- SSH key (generated only when none is supplied) ----------
@@ -116,12 +121,6 @@ locals {
 }
 
 # ---------- Modules ----------
-
-# Keeps the state of deployments created before the network became optional.
-moved {
-  from = module.network
-  to   = module.network[0]
-}
 
 module "network" {
   source = "./modules/network"
@@ -153,7 +152,6 @@ module "storage" {
   tags                     = local.tags
   tarball_path             = local.tarball_path
   license_path             = local.license_path
-  secrets_json             = local.secrets_json
   create_blob_account      = var.blobstore_type == "azure"
   account_tier             = var.storage_account_tier
   replication_type         = var.storage_account_replication_type
@@ -168,6 +166,23 @@ module "storage" {
   blob_private_dns_zone_id = var.blob_private_dns_zone_id
 
   depends_on = [terraform_data.validate_installer, terraform_data.validate_existing_network]
+}
+
+module "key_vault" {
+  source = "./modules/key_vault"
+
+  name_prefix                = local.name_prefix
+  resource_group_name        = azurerm_resource_group.main.name
+  location                   = var.location
+  tags                       = local.tags
+  nodes_subnet_id            = local.nodes_subnet_id
+  allowed_ip_cidrs           = local.storage_allowed_ips
+  node_identity_principal_id = azurerm_user_assigned_identity.nexus.principal_id
+  admin_password             = local.nexus_admin_password
+  create_db_secret           = local.is_postgres
+  db_password                = local.db_password
+
+  depends_on = [terraform_data.validate_existing_network]
 }
 
 module "postgres" {
@@ -201,7 +216,9 @@ module "cloud_init" {
   artifacts_container    = module.storage.artifacts_container
   tarball_blob           = module.storage.tarball_blob
   license_blob           = module.storage.license_blob
-  secrets_blob           = module.storage.secrets_blob
+  key_vault_name         = module.key_vault.name
+  admin_secret_name      = module.key_vault.admin_secret_name
+  db_secret_name         = module.key_vault.db_secret_name
   identity_client_id     = azurerm_user_assigned_identity.nexus.client_id
   java_min_heap          = var.java_min_heap
   java_max_heap          = var.java_max_heap
@@ -218,7 +235,6 @@ module "cloud_init" {
   tls_mode               = local.use_gateway ? "gateway" : "nginx"
   dns_name               = var.dns_name
   certificate_secret_id  = local.certificate_secret_id
-  base_url               = "https://${var.dns_name}"
   gateway_subnet_cidr    = local.gateway_subnet_cidr
   nodes_subnet_cidr      = local.nodes_subnet_cidr
 }
@@ -249,12 +265,13 @@ module "compute" {
   admin_ssh_public_key     = local.admin_ssh_public_key
   custom_data              = module.cloud_init.custom_data
 
-  # Boot needs the certificate grant, open storage firewall and role assignments, and a ready database.
+  # Boot needs the certificate grant, the storage and Key Vault roles and firewalls, and a ready database.
   depends_on = [
     azurerm_role_assignment.key_vault_secrets_user,
     module.network,
     terraform_data.validate_existing_network,
     module.storage,
+    module.key_vault,
     module.postgres,
   ]
 }
@@ -285,7 +302,7 @@ module "gateway" {
   backend_ips             = module.compute.private_ips
   dns_name                = var.dns_name
   certificate_secret_id   = local.certificate_secret_id
-  identity_id             = azurerm_user_assigned_identity.nexus.id
+  identity_id             = azurerm_user_assigned_identity.gateway[0].id
   min_capacity            = var.gateway_min_capacity
   request_timeout_seconds = var.gateway_request_timeout_seconds
   private_frontend        = local.private_frontend

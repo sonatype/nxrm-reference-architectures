@@ -19,7 +19,7 @@ resource "azurerm_subnet" "nodes" {
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.nodes_subnet_cidr]
-  # KeyVault: nginx on single nodes reads the certificate; a firewalled vault needs a rule for this subnet.
+  # KeyVault: nodes read their passwords (and nginx the certificate); the firewalled vaults allow this subnet.
   service_endpoints = ["Microsoft.Storage", "Microsoft.KeyVault"]
 }
 

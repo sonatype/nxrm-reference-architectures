@@ -25,8 +25,16 @@ data "http" "deployer_ip" {
   lifecycle {
     postcondition {
       condition     = self.status_code == 200
-      error_message = "Could not detect the deployer public IP; set detect_deployer_ip = false and list it in storage_allowed_ip_cidrs."
+      error_message = "Could not detect the deployer public IP; list the deployer address in storage_allowed_ip_cidrs and set detect_deployer_ip = false."
     }
+  }
+}
+
+# Warns only: a deployer inside the nodes subnet reaches the installer account without an IP rule.
+check "deployer_ip_allowed" {
+  assert {
+    condition     = var.detect_deployer_ip || length(var.storage_allowed_ip_cidrs) > 0
+    error_message = "No deployer IP is allowed on the installer storage account, so the installer upload fails with 403 unless Terraform runs inside the nodes subnet. Set storage_allowed_ip_cidrs to the public IP of this machine."
   }
 }
 

@@ -11,17 +11,6 @@ locals {
   private_dns_zone_id = coalesce(var.private_dns_zone_id, one(azurerm_private_dns_zone.postgres[*].id))
 }
 
-# Keeps the state of deployments created before the zone became optional.
-moved {
-  from = azurerm_private_dns_zone.postgres
-  to   = azurerm_private_dns_zone.postgres[0]
-}
-
-moved {
-  from = azurerm_private_dns_zone_virtual_network_link.postgres
-  to   = azurerm_private_dns_zone_virtual_network_link.postgres[0]
-}
-
 # Zone and VNet link must exist before the server is created; a central zone replaces both.
 resource "azurerm_private_dns_zone" "postgres" {
   count               = local.create_dns_zone ? 1 : 0
@@ -57,6 +46,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
   version               = var.pg_version
   sku_name              = var.sku_name
   storage_mb            = var.storage_mb
+  auto_grow_enabled     = true
   backup_retention_days = var.backup_retention_days
   zone                  = var.zone
 

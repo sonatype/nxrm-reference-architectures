@@ -38,12 +38,6 @@ variable "license_path" {
   default     = ""
 }
 
-variable "secrets_json" {
-  description = "JSON document with the generated secrets"
-  type        = string
-  sensitive   = true
-}
-
 variable "create_blob_account" {
   description = "Create the storage account used as the Nexus blob store"
   type        = bool

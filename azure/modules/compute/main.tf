@@ -93,5 +93,5 @@ resource "azurerm_virtual_machine_data_disk_attachment" "data" {
   virtual_machine_id = azurerm_linux_virtual_machine.node[count.index].id
   lun                = 0
   # Premium SSD v2 rejects host caching.
-  caching = var.data_disk_type == "PremiumV2_LRS" ? "None" : "ReadWrite"
+  caching = var.data_disk_type == "PremiumV2_LRS" ? "None" : "ReadOnly"
 }

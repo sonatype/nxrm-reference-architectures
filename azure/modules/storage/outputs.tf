@@ -7,12 +7,12 @@
 #
 
 output "artifacts_account_name" {
-  description = "Storage account holding the installer, license and secrets"
+  description = "Storage account holding the installer and license"
   value       = azurerm_storage_account.artifacts.name
 }
 
 output "artifacts_container" {
-  description = "Container holding the installer, license and secrets"
+  description = "Container holding the installer and license"
   value       = azurerm_storage_container.artifacts.name
 }
 
@@ -24,11 +24,6 @@ output "tarball_blob" {
 output "license_blob" {
   description = "Blob name of the license, empty when none"
   value       = var.license_path == "" ? "" : azurerm_storage_blob.license[0].name
-}
-
-output "secrets_blob" {
-  description = "Blob name of the secrets document"
-  value       = azurerm_storage_blob.secrets.name
 }
 
 output "blob_account_name" {

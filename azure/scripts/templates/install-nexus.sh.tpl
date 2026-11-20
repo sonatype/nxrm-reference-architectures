@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2008-present Sonatype, Inc. Installs Java 21 and the Nexus tarball pulled with the VM identity.
+# Copyright (c) 2008-present Sonatype, Inc. Installs the Nexus tarball (it bundles its JDK) pulled with the VM identity.
 set -euo pipefail
 
 SONATYPE_DIR="/opt/sonatype"
@@ -10,32 +10,10 @@ DOWNLOAD_DIR=$(mktemp -d /var/tmp/nxrm-install.XXXXXX)
 trap 'rm -rf "$${DOWNLOAD_DIR}"' EXIT
 
 dnf -y install jq tar curl
-if ! dnf -y install java-21-openjdk-headless; then
-    echo "ERROR: package java-21-openjdk-headless is not available; enable the Oracle Linux AppStream repository" >&2
-    exit 1
-fi
-java -version 2>&1 | head -1
 
-# A token minted before the role assignment propagates has no grant, so mint one per attempt.
-blob_get() {
-    local blob="$1" dest="$2" max_time="$${3:-20}" token http attempt
-    http=000
-    for attempt in $(seq 1 10); do
-        token=$(curl -sS --connect-timeout 10 --max-time 20 -H Metadata:true "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F&client_id=${identity_client_id}" | jq -r '.access_token // empty' || true)
-        if [ -z "$${token}" ]; then
-            echo "attempt $${attempt}: no managed identity token yet"
-            sleep 15
-            continue
-        fi
-        http=$(printf 'header = "Authorization: Bearer %s"\n' "$${token}" | curl -sS --connect-timeout 10 --max-time "$${max_time}" -K - -w '%%{http_code}' -o "$${dest}" -H "x-ms-version: 2021-08-06" "https://${artifacts_account}.blob.core.windows.net/${artifacts_container}/$${blob}" || true)
-        [ "$${http}" = "200" ] && return 0
-        echo "attempt $${attempt}: HTTP $${http} for $${blob} (role assignment may still be propagating)"
-        rm -f "$${dest}"
-        sleep 15
-    done
-    echo "ERROR: download of $${blob} failed, last HTTP $${http}" >&2
-    return 1
-}
+# Shared helpers: blob_get and kv_get
+# shellcheck source=/dev/null
+. /opt/nxrm-bootstrap/lib.sh
 
 TARBALL="$${DOWNLOAD_DIR}/nexus.tar.gz"
 # Large download: 30 minute transfer limit instead of 20 s.
@@ -60,6 +38,11 @@ fi
 rm -rf "$${NEXUS_HOME}"
 mv "$(dirname "$(dirname "$${LAUNCHER}")")" "$${NEXUS_HOME}"
 rm -rf "$${STAGE}"
+# bin/nexus starts the JDK that ships in jdk/; there is no system Java.
+if ! compgen -G "$${NEXUS_HOME}/jdk/*_linux_$(uname -m)/*/bin/java" > /dev/null; then
+    echo "ERROR: ${tarball_blob} has no bundled JDK for $(uname -m); use the Nexus Linux archive for this CPU" >&2
+    exit 1
+fi
 
 chmod -R +x "$${NEXUS_HOME}/bin/"
 chown -R root:root "$${NEXUS_HOME}"

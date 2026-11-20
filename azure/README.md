@@ -19,7 +19,7 @@ This folder provides pre-configured reference architectures for small, mid-sized
 ## What This Provides
 
 - **5 Reference Architecture sizes** (extra-small, small, medium, large, and extra-large) with pre-tuned configurations
-- **High Availability (HA)** support with multi-node clustering in reference architectures 3–5 (i.e., medium through extra-large with a paid Pro license)
+- **High Availability (HA)** support with multi-node clustering in reference architectures 3–5 (i.e., medium through extra-large with a paid Pro license). These tiers survive the loss of a node, not of an availability zone: all nodes, data disks and the NAT gateway run in one zone (`zone`), and PostgreSQL zone-redundant HA is off by default
 - **PostgreSQL or H2 database options** H2 only available for size extra-small; note that PostgreSQL is highly recommended for all deployments and required for HA deployments
 - **Azure Blob Storage or local disk blob storage** The local disk can only be used with the extra-small and small architectures; sizes small through extra-large default to Azure Blob Storage, and Blob Storage is required for HA deployments
 - **HTTPS front end** with a TLS certificate from your Azure Key Vault: Nginx behind a Standard Load Balancer for single-node sizes, Application Gateway v2 for clustered sizes
@@ -106,7 +106,7 @@ files_to_upload_to_nodes/
 HTTPS is mandatory. There is no HTTP-only mode. You need:
 
 1. **A TLS certificate stored in Azure Key Vault as a certificate** (PFX/PKCS#12). The template reads the certificate's secret URI and passes it as `certificate_secret_id`. Use the versionless URI so renewals are picked up, for example `https://my-vault.vault.azure.net/secrets/nexus-cert`. A certificate imported in PEM format is rejected on single-node sizes: import it as PFX.
-2. **A Key Vault that uses Azure RBAC authorization** (not access policies). Terraform grants the deployment's managed identity the **Key Vault Secrets User** role on the certificate secret only, not on the whole vault. `certificate_secret_id` must be in the vault you pass as `certificate_key_vault_id`; the plan fails otherwise.
+2. **A Key Vault that uses Azure RBAC authorization** (not access policies). Terraform grants the **Key Vault Secrets User** role on the certificate secret only, not on the whole vault: to the Application Gateway's own managed identity on clustered sizes, or to the node identity on single-node sizes. `certificate_secret_id` must be in the vault you pass as `certificate_key_vault_id`; the plan fails otherwise.
    - **Key Vault firewall:** if the vault does not allow all networks, single-node sizes (RA-1, RA-2) read the certificate from the nodes: add a virtual network rule for the nodes subnet (the template enables the `Microsoft.KeyVault` service endpoint on it). Clustered sizes read it through the Application Gateway: enable **Allow trusted Microsoft services to bypass this firewall** on the vault.
 3. **A DNS name you control** (`dns_name`, for example `nexus.example.com`). The certificate must cover this name.
 4. **The A record.** Either:
@@ -179,7 +179,7 @@ The installer is uploaded from your machine as part of the apply, so a slow conn
 - A resource group, virtual network with subnets, and a NAT Gateway for outbound traffic
 - Virtual machine(s) running Nexus Repository, with no public IP addresses
 - A Standard Load Balancer with Nginx on the node (single-node sizes) or an Application Gateway v2 (clustered sizes)
-- A Storage account for Blob Storage and for the installer files, and a managed identity
+- A Storage account for Blob Storage and for the installer files, a Key Vault for the generated passwords, and managed identities (one for the nodes and, on clustered sizes, one for the Application Gateway)
 - Azure Database for PostgreSQL Flexible Server (RA-2 and above)
 - Network security groups and, optionally, the DNS A record and Azure Bastion
 
@@ -212,6 +212,7 @@ nxrm_url = "https://nexus.example.com"
 2. **Login:**
    - Username: `admin`
    - Password: (from `terraform output -raw nexus_admin_password`)
+3. **Set the Base URL** under **System → Capabilities → Base URL** to the URL from step 1. Nexus Repository uses it to build absolute links, for example in email notifications. It is not a `nexus.properties` setting, so the template cannot set it.
 
 You're done! Sonatype Nexus Repository is ready to use. Change the initial admin password after the first login (it is stored in the Terraform state, see [State and Secrets](#state-and-secrets)).
 
@@ -404,6 +405,8 @@ The admin password is used for the first start only. Change it in Nexus Reposito
 
 ### State and Secrets
 
+**Key Vault.** The template creates its own Key Vault with Azure RBAC authorization and stores the Nexus admin password and, with PostgreSQL, the database password in it as two secrets. The vault denies all traffic except the nodes subnet (`Microsoft.KeyVault` service endpoint) and the addresses in `storage_allowed_ip_cidrs` (or the detected deployer IP), so Terraform can write the secrets. The node identity has **Key Vault Secrets User** on those two secrets only. The identity that runs Terraform gets **Key Vault Secrets Officer** on the vault, and Terraform waits 90 seconds for that role to propagate before it writes the secrets. Soft delete keeps a deleted vault for 7 days; `terraform destroy` purges it so the name can be reused.
+
 The Terraform state contains the admin and database passwords and, when Terraform generated it, the SSH private key. Use an encrypted remote backend (for example an Azure Storage backend with restricted access), limit who can read the state, and prefer `TF_VAR_nexus_admin_password` and `TF_VAR_db_password` over writing passwords into a tfvars file.
 
 ### SSH Key
@@ -445,17 +448,18 @@ nexus_data_volume_type = "PremiumV2_LRS"  # Default
 
 #### Storage Account Firewalls
 
-**Installer account** (installer, license, secrets): restricted to your deployer IP and the node subnet. With `detect_deployer_ip = true` (default) the template looks up your public IP address on `api.ipify.org` during `plan` and `apply`. A later `plan` or `destroy` from a different public IP gets `403` when Terraform refreshes the uploaded blobs. Run it from the original address, or list the new one (and turn off the lookup if it cannot reach `api.ipify.org`):
+**Installer account** (installer, license, secrets): restricted to your deployer IP and the node subnet. List the public IP of the machine that runs Terraform in `storage_allowed_ip_cidrs`. A later `plan` or `destroy` from a different public IP gets `403` when Terraform refreshes the uploaded blobs, so run it from the listed address or add the new one:
 
 ```hcl
 # terraform.tfvars
-detect_deployer_ip       = false
 storage_allowed_ip_cidrs = ["203.0.113.10"]
 ```
 
-If your public IP has already changed, `plan` and `apply` stop at the refresh with `403` on the installer blobs. Run `terraform apply -refresh=false` once: it updates the firewall rules to your current IP (with `detect_deployer_ip = true`), and later runs work normally. If your IP changes often, list a stable range in `storage_allowed_ip_cidrs` and set `detect_deployer_ip = false`.
+*Optional lookup:* `detect_deployer_ip = true` makes the template look up your public IP address on `https://api.ipify.org` during `plan` and `apply` and add it for you. It is off by default because many environments do not allow Terraform runs to call a third-party service.
 
-**Security of the two accounts.** Both storage accounts keep Shared Key access enabled, because the Terraform `azurerm` provider uses it for data-plane checks and for the uploads to the installer account. Nexus Repository itself authenticates to the blob store with the VM managed identity and neither uses nor stores an account key; Direct Download then uses user delegation signed URLs. For both accounts the network firewall, private containers, HTTPS with TLS 1.2 as the minimum and the refusal of public blob access apply. The installer account holds only the installer, the license and the bootstrap secrets blob.
+If your public IP has already changed, `plan` and `apply` stop at the refresh with `403` on the installer blobs. Run `terraform apply -refresh=false` once: it updates the firewall rules to your current IP (with `detect_deployer_ip = true`), and later runs work normally. If your IP changes often, list a stable range in `storage_allowed_ip_cidrs`.
+
+**Security of the two accounts.** Both storage accounts keep Shared Key access enabled, because the Terraform `azurerm` provider uses it for data-plane checks and for the uploads to the installer account. Nexus Repository itself authenticates to the blob store with the VM managed identity and neither uses nor stores an account key; Direct Download then uses user delegation signed URLs. For both accounts the network firewall, private containers, HTTPS with TLS 1.2 as the minimum and the refusal of public blob access apply. The installer account holds only the installer and the license. The Nexus blob store account keeps soft delete on for blobs and containers (7 days), so deleted data can be recovered during that window.
 
 *Optional hardening:* if your policy requires Shared Key access to be disabled, do it after deployment, and only together with `storage_use_azuread = true` in the `azurerm` provider block and the **Storage Blob Data Contributor** role for the deploying identity on the accounts. Otherwise later `plan` and `apply` runs fail with `KeyBasedAuthenticationNotPermitted`.
 
@@ -496,7 +500,7 @@ Implementing multi-AZ is optional, depending on the customer setup, and is outsi
 
 **Passwords:** `db_password` is generated if not set (minimum 16 characters if you set it). The database server name gets a random suffix because it is a global DNS name.
 
-Do not set `postgres_max_connections` lower than the size tfvars value. Clusters need one pool per node.
+The server storage grows automatically when it fills up (`auto_grow_enabled`), and the IOPS of Premium SSD storage scale with its size, so raise `postgres_storage_mb` if the database needs more IOPS. Do not set `postgres_max_connections` lower than the size tfvars value. Clusters need one pool per node.
 
 ### JVM Settings
 
@@ -537,7 +541,7 @@ All subnets must be in the same virtual network. The `*_subnet_cidr` and `vnet_c
 
 | Subnet | Requirement |
 |---|---|
-| Nodes | Service endpoints `Microsoft.Storage` and, for single-node sizes (RA-1, RA-2), `Microsoft.KeyVault` (the template checks this and stops with a message naming the missing endpoint). Outbound access to the Oracle Linux package repositories, the storage accounts, Key Vault, the instance metadata service `169.254.169.254` and Microsoft Entra ID (a NAT gateway or your firewall). |
+| Nodes | Service endpoints `Microsoft.Storage` and `Microsoft.KeyVault` (the nodes read their passwords from Key Vault; the template checks this and stops with a message naming the missing endpoint). Outbound access to the Oracle Linux package repositories, the storage accounts, Key Vault, the instance metadata service `169.254.169.254` and Microsoft Entra ID (a NAT gateway or your firewall). |
 | Database | Empty, dedicated, delegated to `Microsoft.DBforPostgreSQL/flexibleServers`. Declare the delegation action `Microsoft.Network/virtualNetworks/subnets/join/action` so Terraform sees no drift. The template cannot verify the delegation: a missing delegation fails at apply time. |
 | Gateway | Dedicated to the Application Gateway (nothing else in it). |
 | Bastion | Named `AzureBastionSubnet`, at least /26. |
@@ -611,9 +615,9 @@ The template then creates a private endpoint (`blob`) in the nodes subnet, disab
 
 Be aware of two effects:
 - **Direct Download clients.** Nexus Repository answers a download with a redirect to a signed URL on the blob endpoint. Every client must resolve that name to the private endpoint and reach it (same virtual network, peering, VPN or ExpressRoute with private DNS). Clients outside the network cannot download.
-- **Installer account unchanged.** The account with the installer, license and secrets keeps its firewall and the deployer IP allow-list, because Terraform uploads to it from where you run it. The blob store account needs no data-plane access from your machine (containers are created through Azure Resource Manager), so `terraform apply` from outside the network keeps working.
+- **Installer account unchanged.** The account with the installer and license keeps its firewall and the deployer IP allow-list, because Terraform uploads to it from where you run it. The blob store account needs no data-plane access from your machine (containers are created through Azure Resource Manager), so `terraform apply` from outside the network keeps working.
 
-The Key Vault private endpoint for the TLS certificate is yours to create; the template only needs the identity to read the secret.
+The Key Vault private endpoint for the TLS certificate is yours to create; the template only needs the identity to read the secret. The vault the template creates for the passwords is reached through the nodes subnet service endpoint, not a private endpoint.
 
 ## DNS Setup (Custom Domain)
 
@@ -651,6 +655,7 @@ DNS changes can take a few minutes to propagate. Until the record exists, browse
 1. Get the URL: `terraform output nxrm_url`
 2. Open it in your browser.
 3. Log in as `admin` with the password from `terraform output -raw nexus_admin_password`.
+4. Set the Base URL under **System → Capabilities → Base URL** to that URL.
 
 ### Node Access with Azure Run Command (Troubleshooting)
 
@@ -709,7 +714,7 @@ az network bastion ssh --name nxrm-<environment_name>-bastion --resource-group "
 
 ### Issue: Plan stops with a missing service endpoint (existing network)
 
-The nodes subnet needs the `Microsoft.Storage` service endpoint (and `Microsoft.KeyVault` for RA-1 and RA-2). Add it to the subnet, or the storage firewall rejects the nodes. See [Requirements for your subnets](#requirements-for-your-subnets).
+The nodes subnet needs the `Microsoft.Storage` service endpoint and the `Microsoft.KeyVault` service endpoint. Add them to the subnet, or the storage and Key Vault firewalls reject the nodes. See [Requirements for your subnets](#requirements-for-your-subnets).
 
 ### Issue: Cannot reach a private front end
 
@@ -876,12 +881,12 @@ terraform destroy
 **⚠️ WARNING:** This action permanently deletes:
 - All virtual machines and their managed disks
 - The PostgreSQL server including all data
-- The Storage account and all stored artifacts
+- The Storage account and all stored artifacts, and the Key Vault with the generated passwords
 - The load balancer or Application Gateway, NAT Gateway, public IP addresses, and the virtual network
 - The managed identity, network security groups, and Bastion (if enabled)
 - The DNS A record, if Terraform created it
 
-**Not touched:** your certificate, your Key Vault (only the role assignment Terraform added is removed), and your Azure DNS zone.
+**Not touched:** your certificate, your own Key Vault (only the role assignment Terraform added is removed), and your Azure DNS zone.
 
 **This action is irreversible.** Before destroying production environments:
 

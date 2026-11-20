@@ -24,7 +24,7 @@ resource "random_string" "suffix" {
   special = false
 }
 
-# ---------- Artifacts (installer, license, secrets) ----------
+# ---------- Artifacts (installer, license) ----------
 
 resource "azurerm_storage_account" "artifacts" {
   name                            = "${local.base_name}a${random_string.suffix.result}"
@@ -61,14 +61,6 @@ resource "azurerm_storage_blob" "license" {
   content_md5          = filemd5(var.license_path)
 }
 
-resource "azurerm_storage_blob" "secrets" {
-  name                 = "secrets/nxrm-secrets.json"
-  storage_container_id = azurerm_storage_container.artifacts.id
-  type                 = "Block"
-  source_content       = var.secrets_json
-  content_type         = "application/json"
-}
-
 # Firewall is closed only after the uploads, which need public access from the deployer.
 resource "azurerm_storage_account_network_rules" "artifacts" {
   storage_account_id         = azurerm_storage_account.artifacts.id
@@ -80,7 +72,6 @@ resource "azurerm_storage_account_network_rules" "artifacts" {
   depends_on = [
     azurerm_storage_blob.tarball,
     azurerm_storage_blob.license,
-    azurerm_storage_blob.secrets,
   ]
 }
 
@@ -107,6 +98,16 @@ resource "azurerm_storage_account" "blobs" {
 
   # Private endpoint mode: reachable only through the endpoint (containers are created through Azure Resource Manager).
   public_network_access_enabled = !var.use_private_endpoints
+
+  # Soft delete lets you recover deleted blobs and containers during the retention window.
+  blob_properties {
+    delete_retention_policy {
+      days = 7
+    }
+    container_delete_retention_policy {
+      days = 7
+    }
+  }
 
   # Keep Shared Key enabled: azurerm polls the data plane with it; disabling needs storage_use_azuread.
 }

@@ -7,25 +7,9 @@ umask 077
 NEXUS_URL="http://127.0.0.1:8081"
 BLOBSTORE_NAME="default"
 
-blob_get() {
-    local blob="$1" dest="$2" token http attempt
-    http=000
-    for attempt in $(seq 1 10); do
-        token=$(curl -sS --connect-timeout 10 --max-time 20 -H Metadata:true "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F&client_id=${identity_client_id}" | jq -r '.access_token // empty' || true)
-        if [ -z "$${token}" ]; then
-            echo "attempt $${attempt}: no managed identity token yet"
-            sleep 15
-            continue
-        fi
-        http=$(printf 'header = "Authorization: Bearer %s"\n' "$${token}" | curl -sS --connect-timeout 10 --max-time 20 -K - -w '%%{http_code}' -o "$${dest}" -H "x-ms-version: 2021-08-06" "https://${artifacts_account}.blob.core.windows.net/${artifacts_container}/$${blob}" || true)
-        [ "$${http}" = "200" ] && return 0
-        echo "attempt $${attempt}: HTTP $${http} for $${blob}"
-        rm -f "$${dest}"
-        sleep 15
-    done
-    echo "ERROR: download of $${blob} failed, last HTTP $${http}" >&2
-    return 1
-}
+# Shared helpers: blob_get and kv_get
+# shellcheck source=/dev/null
+. /opt/nxrm-bootstrap/lib.sh
 
 writable=false
 for i in $(seq 1 90); do
@@ -44,9 +28,9 @@ fi
 SECRETS_FILE=$(mktemp /run/nxrm-secrets.XXXXXX)
 CURL_AUTH=$(mktemp /run/nxrm-curl.XXXXXX)
 trap 'rm -f "$${SECRETS_FILE}" "$${CURL_AUTH}"' EXIT
-blob_get "${secrets_blob}" "$${SECRETS_FILE}"
+kv_get "${admin_secret_name}" "$${SECRETS_FILE}"
 # curl config file keeps the password off the command line; escape \ and " for its quoting.
-jq -r '.nexus_admin_password | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"") | "user = \"admin:" + . + "\""' "$${SECRETS_FILE}" > "$${CURL_AUTH}"
+jq -r '.value | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"") | "user = \"admin:" + . + "\""' "$${SECRETS_FILE}" > "$${CURL_AUTH}"
 rm -f "$${SECRETS_FILE}"
 
 STORE_URL="$${NEXUS_URL}/service/rest/v1/blobstores/azure/$${BLOBSTORE_NAME}"
@@ -54,7 +38,7 @@ RESPONSE=/run/nxrm-blobstore-response.json
 trap 'rm -f "$${SECRETS_FILE}" "$${CURL_AUTH}" "$${RESPONSE}"' EXIT
 
 # REST may accept and ignore an unknown field, so read the store back and check both settings.
-# VERIFY-ON-NODE: GET response shape; keys are searched anywhere in the JSON, not by path.
+# Keys are searched anywhere in the response, so the check does not depend on the JSON layout.
 verify_blobstore() {
     local http
     http=$(curl -sS --connect-timeout 10 --max-time 20 -K "$${CURL_AUTH}" -o "$${RESPONSE}" -w '%%{http_code}' "$${STORE_URL}" || true)
@@ -79,7 +63,7 @@ if [ "$${http}" = "200" ]; then
     exit 0
 fi
 
-# VERIFY-ON-NODE: field names against /service/rest/swagger.json (AzureBlobStoreApiModel).
+# Payload accepted by Nexus 3.98 (AzureBlobStoreApiModel); verify_blobstore reads it back.
 PAYLOAD=$(jq -n \
     --arg name "$${BLOBSTORE_NAME}" \
     --arg account "${blob_account}" \

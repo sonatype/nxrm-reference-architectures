@@ -27,21 +27,9 @@ fail_with_diagnostics() {
     exit 1
 }
 
-# Last resort only: permissive SELinux when systemd cannot execute Nexus (203/EXEC), then one retry.
-selinux_fallback() {
-    [ "$(getenforce 2> /dev/null)" = "Enforcing" ] || return 1
-    systemctl show nexus -p ExecMainStatus --value | grep -qx 203 ||
-        journalctl -u nexus -n 50 --no-pager | grep -q '203/EXEC' || return 1
-    echo "WARNING: nexus failed with 203/EXEC under SELinux enforcing; switching SELinux to permissive"
-    setenforce 0
-    sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
-    systemctl reset-failed nexus
-    systemctl start nexus
-}
-
 systemctl daemon-reload
 systemctl enable nexus
-systemctl start nexus || selinux_fallback || fail_with_diagnostics "nexus.service did not start"
+systemctl start nexus || fail_with_diagnostics "nexus.service did not start (on 203/EXEC check the SELinux labels of /opt/sonatype/nexus)"
 
 for i in $(seq 1 90); do
     if curl -sf --connect-timeout 10 --max-time 20 -o /dev/null "$${STATUS_URL}"; then

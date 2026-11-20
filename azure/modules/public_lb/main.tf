@@ -7,11 +7,6 @@
 #
 
 # TLS terminates on the node (Nginx), so the LB passes TCP 80/443 through.
-moved {
-  from = azurerm_public_ip.this
-  to   = azurerm_public_ip.this[0]
-}
-
 # A private frontend takes an address in the nodes subnet instead of a public IP.
 resource "azurerm_public_ip" "this" {
   count               = var.private_frontend ? 0 : 1

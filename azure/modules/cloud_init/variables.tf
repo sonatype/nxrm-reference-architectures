@@ -17,12 +17,12 @@ variable "cluster_size" {
 }
 
 variable "artifacts_account" {
-  description = "Storage account holding the installer, license and secrets"
+  description = "Storage account holding the installer and license"
   type        = string
 }
 
 variable "artifacts_container" {
-  description = "Container holding the installer, license and secrets"
+  description = "Container holding the installer and license"
   type        = string
 }
 
@@ -38,9 +38,20 @@ variable "license_blob" {
   nullable    = false
 }
 
-variable "secrets_blob" {
-  description = "Blob name of the secrets JSON document (keys nexus_admin_password, db_password)"
+variable "key_vault_name" {
+  description = "Key Vault holding the generated passwords"
   type        = string
+}
+
+variable "admin_secret_name" {
+  description = "Key Vault secret with the Nexus admin password"
+  type        = string
+}
+
+variable "db_secret_name" {
+  description = "Key Vault secret with the database password, empty when there is none"
+  type        = string
+  default     = ""
 }
 
 variable "identity_client_id" {
@@ -154,11 +165,6 @@ variable "dns_name" {
 
 variable "certificate_secret_id" {
   description = "Versionless Key Vault secret URI of the TLS certificate (PFX)"
-  type        = string
-}
-
-variable "base_url" {
-  description = "Nexus base URL, for example https://nexus.example.com"
   type        = string
 }
 

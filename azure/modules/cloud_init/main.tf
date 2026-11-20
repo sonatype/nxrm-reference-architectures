@@ -15,7 +15,9 @@ locals {
     artifacts_container    = var.artifacts_container
     tarball_blob           = var.tarball_blob
     license_blob           = var.license_blob
-    secrets_blob           = var.secrets_blob
+    key_vault_name         = var.key_vault_name
+    admin_secret_name      = var.admin_secret_name
+    db_secret_name         = var.db_secret_name
     identity_client_id     = var.identity_client_id
     java_min_heap          = var.java_min_heap
     java_max_heap          = var.java_max_heap
@@ -33,7 +35,6 @@ locals {
     tls_mode               = var.tls_mode
     dns_name               = var.dns_name
     certificate_secret_id  = var.certificate_secret_id
-    base_url               = var.base_url
     app_port_sources       = compact(distinct([var.gateway_subnet_cidr, var.nodes_subnet_cidr]))
   }
 
@@ -56,9 +57,13 @@ locals {
     }
   ]
 
+  # Sourced by the other scripts: written to every node, never run on its own.
+  lib_script = templatefile("${local.template_dir}/lib.sh.tpl", local.template_vars)
+
+  # Scripts are gzipped inside the cloud-config to stay well below the 64 KB custom_data limit.
   custom_data = [
     for i in range(var.cluster_size) : base64encode(templatefile("${local.template_dir}/cloud-init.yaml.tpl", {
-      scripts   = { for name, text in local.node_scripts[i] : name => base64encode(text) }
+      scripts   = { for name, text in merge({ lib = local.lib_script }, local.node_scripts[i]) : name => base64gzip(text) }
       run_order = local.run_order[i]
     }))
   ]

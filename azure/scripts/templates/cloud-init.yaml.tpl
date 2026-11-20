@@ -5,7 +5,7 @@ write_files:
   - path: /opt/nxrm-bootstrap/${name}.sh
     owner: root:root
     permissions: "0700"
-    encoding: b64
+    encoding: gz+b64
     content: ${content}
 %{ endfor ~}
 runcmd:

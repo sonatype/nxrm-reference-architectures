@@ -18,6 +18,11 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
+    # Waits for the role that lets Terraform write the Key Vault secrets.
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.12"
+    }
     http = {
       source  = "hashicorp/http"
       version = "~> 3.0"

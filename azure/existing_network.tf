@@ -47,8 +47,8 @@ resource "terraform_data" "validate_existing_network" {
     }
 
     precondition {
-      condition     = local.use_gateway || contains(data.azurerm_subnet.nodes[0].service_endpoints, "Microsoft.KeyVault")
-      error_message = "The nodes subnet (nodes_subnet_id) needs the Microsoft.KeyVault service endpoint on single nodes (nginx reads the certificate): add it to the subnet."
+      condition     = contains(data.azurerm_subnet.nodes[0].service_endpoints, "Microsoft.KeyVault")
+      error_message = "The nodes subnet (nodes_subnet_id) needs the Microsoft.KeyVault service endpoint (the nodes read their passwords from Key Vault): add it to the subnet."
     }
   }
 }

@@ -533,9 +533,9 @@ variable "blob_client_subnet_ids" {
 }
 
 variable "detect_deployer_ip" {
-  description = "Detect the deployer public IP and add it to the storage account firewall"
+  description = "Look up the deployer public IP on api.ipify.org and add it to the storage account firewall; when false, list it in storage_allowed_ip_cidrs"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # ---------- HTTPS ----------

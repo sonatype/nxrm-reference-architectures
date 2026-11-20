@@ -23,7 +23,9 @@ module "ci" {
   artifacts_container    = "nxrm-assets"
   tarball_blob           = "nexus-3.0.0-unix.tar.gz"
   license_blob           = "nexus.lic"
-  secrets_blob           = "secrets/nxrm-secrets.json"
+  key_vault_name         = "nxrmkv"
+  admin_secret_name      = "nexus-admin-password"
+  db_secret_name         = "nexus-db-password"
   identity_client_id     = "00000000-0000-0000-0000-000000000003"
   java_min_heap          = "16g"
   java_max_heap          = "16g"
@@ -39,7 +41,6 @@ module "ci" {
   tls_mode               = "${tls_mode}"
   dns_name               = "nexus.example.com"
   certificate_secret_id  = "https://kv-test.vault.azure.net/secrets/nexus-cert"
-  base_url               = "https://nexus.example.com"
 }
 TF
     terraform -chdir="${dir}" init -backend=false -input=false > /dev/null
@@ -52,7 +53,14 @@ TF
     for i in $(seq 0 $((count - 1))); do
         jq -r ".custom_data[${i}]" "${dir}/rendered.json" | base64 -d > "${dir}/cloud-init-${i}.yaml"
         head -1 "${dir}/cloud-init-${i}.yaml" | grep -qx '#cloud-config' || { echo "FAIL ${name}: node ${i} is not cloud-config"; exit 1; }
-        echo "ok   ${name}: node ${i} cloud-config"
+        grep -q 'encoding: gz+b64' "${dir}/cloud-init-${i}.yaml" || { echo "FAIL ${name}: node ${i} scripts are not gz+b64"; exit 1; }
+        # The embedded scripts must gunzip back to shell scripts.
+        grep -E '^    content: ' "${dir}/cloud-init-${i}.yaml" | sed 's/^    content: //' | while read -r blob; do
+            printf '%s' "${blob}" | base64 -d | gunzip | head -1 | grep -q '^#!/bin/bash' || exit 1
+        done || { echo "FAIL ${name}: node ${i} embedded script does not gunzip to a shell script"; exit 1; }
+        size=$(jq -r ".custom_data[${i}] | length" "${dir}/rendered.json")
+        [ "${size}" -lt 65536 ] || { echo "FAIL ${name}: node ${i} custom_data is ${size} bytes, Azure allows 65536"; exit 1; }
+        echo "ok   ${name}: node ${i} cloud-config (${size} bytes of 65536)"
     done
     for script in $(jq -r '.scripts | keys[]' "${dir}/rendered.json"); do
         jq -r --arg s "${script}" '.scripts[$s]' "${dir}/rendered.json" > "${dir}/${script}.sh"
@@ -79,7 +87,7 @@ test_secret_escaping() {
     local dir="$1" helpers jq_line t="${WORK}/escaping" i=0 pw got want
     mkdir -p "${t}"
     helpers=$(grep -E '^(env_quote|prop_escape)\(\) ' "${dir}/configure-nexus.sh" || true)
-    jq_line=$(grep -E "^jq -r '\.nexus_admin_password \| gsub" "${dir}/create-blobstore.sh" || true)
+    jq_line=$(grep -E "^jq -r '\.value \| gsub" "${dir}/create-blobstore.sh" || true)
     [ "$(printf '%s\n' "${helpers}" | grep -c .)" -eq 2 ] || { echo "FAIL escaping: helpers not found in configure-nexus"; exit 1; }
     [ -n "${jq_line}" ] || { echo "FAIL escaping: curl-config jq line not found in create-blobstore"; exit 1; }
     eval "${helpers}"
@@ -112,8 +120,8 @@ test_secret_escaping() {
         printf 'p%s=%s\n' "${i}" "${got}" >> "${t}/store.properties"
         printf '%s' "${pw}" > "${t}/pw-${i}"
 
-        # curl config form, built by the same jq expression from a JSON secrets file
-        jq -n --arg p "${pw}" '{nexus_admin_password: $p}' > "${t}/secrets.json"
+        # curl config form, built by the same jq expression from a Key Vault secret response
+        jq -n --arg p "${pw}" '{value: $p}' > "${t}/secrets.json"
         got=$(SECRETS_FILE="${t}/secrets.json" CURL_AUTH="${t}/curl-${i}.cfg" bash -c "${jq_line}" && cat "${t}/curl-${i}.cfg")
         want=$(python3 -I -c 'import sys; print("user = \"admin:" + sys.argv[1].replace("\\", "\\\\").replace("\"", "\\\"") + "\"")' "${pw}")
         [ "${got}" = "${want}" ] || { echo "FAIL curl config #${i}: got [${got}] want [${want}]"; exit 1; }
