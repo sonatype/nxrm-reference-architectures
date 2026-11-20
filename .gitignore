@@ -1,0 +1,11 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+# Keys and local variable files
+*.pem
+*.tfvars.local
+# OS
+.DS_Store
