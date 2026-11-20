@@ -39,6 +39,14 @@ locals {
   license_path = try("${path.root}/${var.installer_dir}/${one(local.license_files)}", "")
 }
 
+# Warning: An internet-facing deployment can be intended, but it should be a choice, please consider your own security & networking requirements.
+check "ingress_not_open_to_internet" {
+  assert {
+    condition     = !contains(var.ingress_cidr_blocks, "0.0.0.0/0")
+    error_message = "ingress_cidr_blocks contains 0.0.0.0/0: the gateway and the blob store firewall accept connections from the whole internet. Set it to your client ranges unless that is intended."
+  }
+}
+
 resource "azurerm_resource_group" "main" {
   name     = "${local.name_prefix}-rg"
   location = var.location

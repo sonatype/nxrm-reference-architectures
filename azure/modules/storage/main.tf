@@ -99,7 +99,7 @@ resource "azurerm_storage_account" "blobs" {
   # Private endpoint mode: reachable only through the endpoint (containers are created through Azure Resource Manager).
   public_network_access_enabled = !var.use_private_endpoints
 
-  # Soft delete lets you recover deleted blobs and containers during the retention window.
+  # Soft delete only: versioning, backups and protection against deleting the account are up to the customer.
   blob_properties {
     delete_retention_policy {
       days = 7

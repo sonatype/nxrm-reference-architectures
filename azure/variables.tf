@@ -493,6 +493,8 @@ variable "node_private_ips" {
   }
 }
 
+# The default 0.0.0.0/0 lets the whole internet reach the gateway and opens the blob store firewall.
+# Restricting it to your client ranges is the customer's responsibility.
 variable "ingress_cidr_blocks" {
   description = "CIDR blocks allowed to reach the gateway on 80/443"
   type        = list(string)

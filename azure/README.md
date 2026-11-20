@@ -11,6 +11,7 @@ This folder provides pre-configured reference architectures for small, mid-sized
 - Understanding Azure pricing before deployment
 - Cleaning up resources when no longer needed to avoid ongoing charges
 - Reviewing and optimizing your deployment for cost efficiency
+- Restricting network access (`ingress_cidr_blocks`) and protecting your data (backups, versioning, delete protection) for your own requirements
 
 **Sonatype provides this template as-is to help you deploy Nexus Repository infrastructure but bears no responsibility for any Azure costs you incur.** Use Azure Cost Management and budget alerts to track your spending.
 
@@ -151,6 +152,9 @@ dns_name = "nexus.example.com"
 # Key Vault that holds the certificate, and the versionless secret URI of the certificate
 certificate_key_vault_id = "/subscriptions/<subscription-id>/resourceGroups/<vault-rg>/providers/Microsoft.KeyVault/vaults/<vault-name>"
 certificate_secret_id    = "https://<vault-name>.vault.azure.net/secrets/<certificate-name>"
+
+# Public IP of the machine that runs Terraform (it uploads the installer; not needed inside the nodes subnet)
+storage_allowed_ip_cidrs = ["<your public IP>"]
 ```
 
 Provide the subscription without writing it to a file:
@@ -158,7 +162,13 @@ Provide the subscription without writing it to a file:
 export TF_VAR_azure_subscription_id=$(az account show --query id -o tsv)
 ```
 
-**That's it!** All other settings have sensible defaults. See [Customization Options](#customization-options) for advanced configuration.
+**Review these settings for your environment.** The defaults get you a working deployment, not a hardened one, and setting them correctly is your responsibility:
+
+- **`ingress_cidr_blocks` (warning).** The default `["0.0.0.0/0"]` lets the whole internet reach the gateway and also opens the blob store firewall. `terraform plan` prints a warning while it is left at the default. Set it to your client ranges (see [Networking](#networking)).
+- **Blob store data protection.** The template enables soft delete (7 days) on the Nexus blob store account and nothing more. Versioning, backups and protection against deleting the account (for example an Azure resource lock) are yours to add according to your recovery needs. `terraform destroy` deletes the account and its contents.
+- **Base URL, state and TLS.** See [Access Nexus Repository](#step-5-access-nexus-repository) and [State and Secrets](#state-and-secrets).
+
+See [Customization Options](#customization-options) for advanced configuration.
 
 ### Step 3: Deploy
 
@@ -363,6 +373,8 @@ gateway_subnet_cidr = "10.100.4.0/24"
 ingress_cidr_blocks = ["203.0.113.0/24", "198.51.100.7/32"]  # Default: ["0.0.0.0/0"]
 ```
 
+> **Warning:** leaving `ingress_cidr_blocks` at its default `["0.0.0.0/0"]` allows access from the whole internet to the gateway and opens the blob store firewall. Terraform only warns during `plan`. Set it to the ranges your clients use.
+
 `ingress_cidr_blocks` must hold public addresses: it also feeds the firewall of the blob store account (see [Storage Account Firewalls](#storage-account-firewalls)), which accepts only public IP ranges.
 
 The VMs have no public IP addresses. Outbound traffic leaves through a NAT Gateway. To use subnets you already have, see [Bring Your Own Network](#bring-your-own-network).
@@ -459,7 +471,7 @@ storage_allowed_ip_cidrs = ["203.0.113.10"]
 
 If your public IP has already changed, `plan` and `apply` stop at the refresh with `403` on the installer blobs. Run `terraform apply -refresh=false` once: it updates the firewall rules to your current IP (with `detect_deployer_ip = true`), and later runs work normally. If your IP changes often, list a stable range in `storage_allowed_ip_cidrs`.
 
-**Security of the two accounts.** Both storage accounts keep Shared Key access enabled, because the Terraform `azurerm` provider uses it for data-plane checks and for the uploads to the installer account. Nexus Repository itself authenticates to the blob store with the VM managed identity and neither uses nor stores an account key; Direct Download then uses user delegation signed URLs. For both accounts the network firewall, private containers, HTTPS with TLS 1.2 as the minimum and the refusal of public blob access apply. The installer account holds only the installer and the license. The Nexus blob store account keeps soft delete on for blobs and containers (7 days), so deleted data can be recovered during that window.
+**Security of the two accounts.** Both storage accounts keep Shared Key access enabled, because the Terraform `azurerm` provider uses it for data-plane checks and for the uploads to the installer account. Nexus Repository itself authenticates to the blob store with the VM managed identity and neither uses nor stores an account key; Direct Download then uses user delegation signed URLs. For both accounts the network firewall, private containers, HTTPS with TLS 1.2 as the minimum and the refusal of public blob access apply. The installer account holds only the installer and the license. The Nexus blob store account keeps soft delete on for blobs and containers (7 days), so deleted blobs and containers can be recovered during that window. Soft delete does not protect the account itself, and the template sets no versioning, backup or resource lock: add them according to your recovery needs.
 
 *Optional hardening:* if your policy requires Shared Key access to be disabled, do it after deployment, and only together with `storage_use_azuread = true` in the `azurerm` provider block and the **Storage Blob Data Contributor** role for the deploying identity on the accounts. Otherwise later `plan` and `apply` runs fail with `KeyBasedAuthenticationNotPermitted`.
 
@@ -881,7 +893,7 @@ terraform destroy
 **⚠️ WARNING:** This action permanently deletes:
 - All virtual machines and their managed disks
 - The PostgreSQL server including all data
-- The Storage account and all stored artifacts, and the Key Vault with the generated passwords
+- The Storage account and all stored artifacts (permanently: soft delete does not cover a deleted account), and the Key Vault with the generated passwords
 - The load balancer or Application Gateway, NAT Gateway, public IP addresses, and the virtual network
 - The managed identity, network security groups, and Bastion (if enabled)
 - The DNS A record, if Terraform created it
