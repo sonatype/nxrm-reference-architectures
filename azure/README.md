@@ -12,6 +12,7 @@ This folder provides pre-configured reference architectures for small, mid-sized
 - Cleaning up resources when no longer needed to avoid ongoing charges
 - Reviewing and optimizing your deployment for cost efficiency
 - Restricting network access (`ingress_cidr_blocks`) and protecting your data (backups, versioning, delete protection) for your own requirements
+- Obtaining and installing a valid Sonatype license (required for RA-3 to RA-5, recommended for RA-2), and reviewing and accepting the terms that apply to it, including the End User License Agreement where Nexus Repository asks for it
 
 **Sonatype provides this template as-is to help you deploy Nexus Repository infrastructure but bears no responsibility for any Azure costs you incur.** Use Azure Cost Management and budget alerts to track your spending.
 
@@ -74,6 +75,8 @@ which jq
     - The VMs are x86_64. Download the **x86_64 Linux** version.
 2. Download the **Unix/Linux (.tar.gz)** version
 3. Download your **Pro license file** (.lic). It is required for RA-3 through RA-5 because clustering needs Pro. For RA-2 a Pro license is recommended; the template does not require one on a single node. RA-1 can use Community Edition.
+
+**License and EULA.** The license file you install is governed by your agreement with Sonatype, and reviewing and accepting its terms is your responsibility. Without a license (RA-1, or RA-2 if you skip it), Nexus Repository runs as Community Edition: it presents its End User License Agreement in the first-login onboarding wizard and refuses uploads until you accept it.
 
 The template was tested with a Nexus Repository 3.98.x build; other recent 3.x releases are expected to work. Try your own version in a non-production environment first.
 
@@ -164,6 +167,7 @@ export TF_VAR_azure_subscription_id=$(az account show --query id -o tsv)
 
 **Review these settings for your environment.** The defaults get you a working deployment, not a hardened one, and setting them correctly is your responsibility:
 
+- **License.** The template installs the `.lic` file you place in `files_to_upload_to_nodes/`. It does not provide or renew a license, so getting a valid one and accepting its terms is your responsibility (see [Nexus Repository Installer Files](#3-nexus-repository-installer-files)). Without a license, Nexus Repository runs as Community Edition and asks you to accept its End User License Agreement on first login.
 - **`ingress_cidr_blocks` (warning).** The default `["0.0.0.0/0"]` lets the whole internet reach the gateway and also opens the blob store firewall. `terraform plan` prints a warning while it is left at the default. Set it to your client ranges (see [Networking](#networking)).
 - **Blob store data protection.** The template enables soft delete (7 days) on the Nexus blob store account and nothing more. Versioning, backups and protection against deleting the account (for example an Azure resource lock) are yours to add according to your recovery needs. `terraform destroy` deletes the account and its contents.
 - **Base URL, state and TLS.** See [Access Nexus Repository](#step-5-access-nexus-repository) and [State and Secrets](#state-and-secrets).
@@ -222,7 +226,8 @@ nxrm_url = "https://nexus.example.com"
 2. **Login:**
    - Username: `admin`
    - Password: (from `terraform output -raw nexus_admin_password`)
-3. **Set the Base URL** under **System → Capabilities → Base URL** to the URL from step 1. Nexus Repository uses it to build absolute links, for example in email notifications. It is not a `nexus.properties` setting, so the template cannot set it.
+3. **Follow the onboarding wizard** if it appears on first login. The template does not disable it. Without a license it includes the End User License Agreement, which you must accept before uploading anything.
+4. **Set the Base URL** under **System → Capabilities → Base URL** to the URL from step 1. Nexus Repository uses it to build absolute links, for example in email notifications. It is not a `nexus.properties` setting, so the template cannot set it.
 
 You're done! Sonatype Nexus Repository is ready to use. Change the initial admin password after the first login (it is stored in the Terraform state, see [State and Secrets](#state-and-secrets)).
 
