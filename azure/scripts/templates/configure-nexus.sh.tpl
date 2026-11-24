@@ -45,7 +45,6 @@ prop nexus.skipDefaultRepositories true
 # The Azure blob store is created later; the file default stays only for the file blob store.
 prop nexus.blobstore.provisionDefaults false
 %{ endif ~}
-prop nexus.onboarding.enabled false
 if [ -f "$${NEXUS_DATA}/etc/license.lic" ]; then
     prop nexus.licenseFile "$${NEXUS_DATA}/etc/license.lic"
 fi
