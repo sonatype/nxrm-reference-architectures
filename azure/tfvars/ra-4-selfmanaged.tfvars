@@ -63,6 +63,7 @@ database_type            = "postgres"
 nxrm_connection_pool     = 200
 postgres_sku_name        = "MO_Standard_E16ds_v5"
 postgres_max_connections = 5000
+postgres_storage_mb      = 131072 # 128 GiB as tested; IOPS scale with storage size
 # Implementing multi-AZ is optional, depending on the customer setup, and is outside the tested configurations.
 postgres_zone_redundant_ha = false
 

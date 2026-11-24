@@ -460,7 +460,7 @@ nexus_data_volume_type = "PremiumV2_LRS"  # Default
 
 #### Storage Account Firewalls
 
-**Installer account** (installer, license, secrets): restricted to your deployer IP and the node subnet. List the public IP of the machine that runs Terraform in `storage_allowed_ip_cidrs`. A later `plan` or `destroy` from a different public IP gets `403` when Terraform refreshes the uploaded blobs, so run it from the listed address or add the new one:
+**Installer account** (installer, license): restricted to your deployer IP and the node subnet. List the public IP of the machine that runs Terraform in `storage_allowed_ip_cidrs`. A later `plan` or `destroy` from a different public IP gets `403` when Terraform refreshes the uploaded blobs, so run it from the listed address or add the new one:
 
 ```hcl
 # terraform.tfvars
